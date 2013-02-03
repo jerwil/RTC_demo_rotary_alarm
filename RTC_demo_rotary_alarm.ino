@@ -327,7 +327,7 @@ if (old_second >= 59){
   old_second = 0;
 }
 if (now_second > old_second){
-  Serial.print("Alarm!!!!");
+  Serial.print("Alarm!!!! EVEN MORE EXCLAMATION!");
   Serial.println();
   old_second = now_second;
 }
