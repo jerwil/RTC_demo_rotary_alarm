@@ -1,5 +1,4 @@
 // Date and time functions using a DS1307 RTC connected via I2C and Wire lib
-// This is the master
  
 #include <Wire.h>
 #include "RTClib.h"
