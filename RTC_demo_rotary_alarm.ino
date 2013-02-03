@@ -18,7 +18,7 @@ unsigned char encoder_A_prev=0;
 int current_count;
 int mode = 1;
 char* mode_str[] = {"Tacos","Clock","Alarm Set"};
-double alarm = 28800; // Alarm default in seconds
+double alarm = 10800; // Alarm default in seconds
 int alarm_array[6];
 int current_time_array[6];
 int old_second = 0; //This is used for the tick mechanism
