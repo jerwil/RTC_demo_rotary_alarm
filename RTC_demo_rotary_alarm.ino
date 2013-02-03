@@ -327,7 +327,7 @@ if (old_second >= 59){
   old_second = 0;
 }
 if (now_second > old_second){
-  Serial.print("Alarm!!!! This is testing using git gui");
+  Serial.print("Alarm!!!! This is testing using git gui. I checked out the alarm branch");
   Serial.println();
   old_second = now_second;
 }
