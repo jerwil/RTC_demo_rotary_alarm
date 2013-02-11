@@ -6,6 +6,7 @@
 RTC_DS1307 RTC;
 
 int adjust_amount = 60;    // how many seconds to adjust the time by
+int multiplier = 1; // This mutliplier is used to change to hour adjustment
 unsigned long currentTime;
 unsigned long loopTime;
 const int pin_A = 11;  // Rotary encoder pin A
@@ -15,12 +16,14 @@ unsigned char encoder_A;
 unsigned char encoder_B;
 unsigned char encoder_A_prev=0;
 int current_count;
-int mode = 1;
+char* mode = "time_disp";
+char* sub_mode = "minute_set";
 char* mode_str[] = {"Tacos","Clock","Alarm Set"};
 double alarm = 10800; // Alarm default in seconds
 int alarm_array[6];
 int current_time_array[6];
 int old_second = 0; //This is used for the tick mechanism
+int now_second = 0;
 int unixtime_int = 0;
 int display_array[6];
 int time_format = 12;
@@ -28,6 +31,7 @@ boolean button_hold = false;
 int button_state = 0;
 int button_counter = 0; // This is used to detect how long the button is held for
 int timeout = 0; // Time out for not pushing the button for a while
+int blink = 1; // This is used for blinking numbers while adjusting time
 
 // Bit shifter pins:
 
@@ -50,6 +54,9 @@ void setup () {
     Serial.begin(57600);
     Wire.begin();
     RTC.begin();
+	DateTime now = RTC.now();
+	int now_second = now.second();
+	old_second = now_second;
     //DateTime now = RTC.now();
 	
   // Setup the digits array
@@ -91,7 +98,7 @@ void printtime(DateTime time){
     Serial.print(time.second(), DEC);
     Serial.println();
     Serial.print("mode = ");    
-    Serial.print(mode_str[mode]);
+    Serial.print(mode);
     Serial.println();  
 }
 
@@ -233,10 +240,10 @@ else {
 
 // The following checks the alarm condition:
 if (alarm == time_to_double(now)){
-  mode = 3;
+  mode = "alarm_sound";
 }
 
- if(mode == 1){ // This is current time mode
+ if(mode == "time_disp"){ // This is current time mode
    currentTime = millis();
    time_array_to_digit_array(current_time_array, display_array); 
  // get the current elapsed time
@@ -273,12 +280,9 @@ if (alarm == time_to_double(now)){
 // New tick mechanism:
 
 
-int now_second = now.second();
-if (old_second >= 59){
-  old_second = 0;
-}
+now_second = now.second();
 
-if (now_second > old_second) // This is the code that causes the clock to "tick"
+if (now_second == old_second + 1) // This is the code that causes the clock to "tick"
 {
   Serial.print("Unix time: ");
   Serial.print(now.unixtime());
@@ -288,12 +292,14 @@ if (now_second > old_second) // This is the code that causes the clock to "tick"
   Serial.print("Time as a double: ");
   Serial.print(time_to_double(now));
   Serial.println();
-  if (button_hold == true){
+  if (button_hold == true){ // This code checks to see if the button has been held down long enough to set alarm
     if (button_counter >= 3) {
-      mode = 2;
+      mode = "alarm_set";
+	  sub_mode = "minute_set";
     Serial.print("Switched mode to:");
-    Serial.print(mode_str[mode]);
+    Serial.print(mode);
     Serial.println();
+	loopTime = currentTime;
     }
     button_counter += 1;
   }
@@ -304,11 +310,14 @@ if (now_second > old_second) // This is the code that causes the clock to "tick"
   Serial.print(button_counter);
   Serial.println();
 }
+
+if (old_second >= 59){
+  old_second = 0;
+}
 }
 
- if(mode == 2){ // This is alarm set mode
+ if(mode == "alarm_set"){ // This is alarm set mode
  
- time_array_to_digit_array(alarm_array, display_array);
  secs_to_hms(alarm, alarm_array);
 
 
@@ -316,32 +325,71 @@ if (now_second > old_second) // This is the code that causes the clock to "tick"
  encoder_A = digitalRead(pin_A);    // Read encoder pins
  encoder_B = digitalRead(pin_B);   
     if((!encoder_A) && (encoder_A_prev)){
+	timeout = 0;   
+	blink = 1;
+		if (sub_mode == "minute_set"){
+		multiplier = 1;
+		}
+		else if (sub_mode == "hour_set"){
+		multiplier = 60;
+		}
       // A has gone from high to low 
       if(encoder_B) {
         // B is high so clockwise
-        timeout = 0; 
-        alarm += adjust_amount; // adjust alarm by a set amount (minute)
+        alarm += adjust_amount*multiplier; // adjust alarm by a set amount (minute)
       }
       else {
-        // B is low so counter-clockwise
-          timeout = 0;       
+        // B is low so counter-clockwise    
           alarm -= adjust_amount;     
       }   
 
     }
     encoder_A_prev = encoder_A;
+	
 
+time_array_to_digit_array(alarm_array, display_array);
 
+if (blink == 0){
+	display_array[2] = 10;
+	display_array[3] = 10;
+	}
+	
+currentTime = millis();
+if(currentTime >= (loopTime + 500)){
+	if (sub_mode == "minute_set" && blink == 0){
+	display_array[2] = 10;
+	display_array[3] = 10;
+	blink = 1;
+	Serial.print("Blink off");
+	Serial.println();
+	Serial.print("Loop time = ");
+	Serial.print(loopTime);
+	Serial.println();
+	Serial.print("Current time = ");
+	Serial.print(currentTime);
+	Serial.println();    
+	}
+	else if (sub_mode == "minute_set" && blink == 1){
+	blink = 0;
+	Serial.print("Blink on");
+	Serial.println();
+	Serial.print("Loop time = ");
+	Serial.print(loopTime);
+	Serial.println();
+	Serial.print("Current time = ");
+	Serial.print(currentTime);
+	Serial.println();   	
+	}	
+  loopTime = currentTime;
+  }
   
-  int now_second = now.second();
-if (old_second >= 59){
-  old_second = 1;
-}
-if (now_second > old_second){
+  now_second = now.second();
+
+if (now_second == old_second + 1){
   old_second = now_second;
   timeout += 1;
-  if (timeout >= 10){ // If the butto
-    mode = 1;
+  if (timeout >= 10){ // If the button is not pressed for 10 seconds
+    mode = "time_disp";
     timeout = 0;
     Serial.print("Timeout, switching to clock mode");
     Serial.println();
@@ -351,13 +399,17 @@ if (now_second > old_second){
   print_time_array_separated(alarm_array);
 }
 
+if (old_second >= 59){
+  old_second = 0;
+}
+
 
 
 
    
  }
  
-if(mode == 3){ // This is alarm mode
+if(mode == "alarm_sound"){ // This is alarm mode
   
 int now_second = now.second();
 if (old_second >= 59){
