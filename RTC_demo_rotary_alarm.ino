@@ -8,8 +8,8 @@ RTC_DS1307 RTC;
 int adjust_amount = 60;    // how many seconds to adjust the time by
 unsigned long currentTime;
 unsigned long loopTime;
-const int pin_A = 7;  // pin 12
-const int pin_B = 6;  // pin 11
+const int pin_A = 11;  // Rotary encoder pin A
+const int pin_B = 10;  // Rotary encoder pin B
 const int button_pin = 8;
 unsigned char encoder_A;
 unsigned char encoder_B;
@@ -28,17 +28,43 @@ boolean button_hold = false;
 int button_state = 0;
 int button_counter = 0; // This is used to detect how long the button is held for
 int timeout = 0; // Time out for not pushing the button for a while
+
+// Bit shifter pins:
+
+const int  g_pinCommLatch = 6; // This pin gets sets low when I want the 595s to listen
+const int  g_pinClock     = 7; // This pin is used by ShiftOut to toggle to say there's another bit to shift
+const int  g_pinData    = 4; // This pin is used to pass the next bit
+byte g_digits [11]; // Array of binary values for each digit
+const int g_registers = 4; // Number of shift registers in use
+byte g_registerArray [g_registers]; // Array of numbers to pass to shift registers
  
 void setup () {
     pinMode(pin_A, INPUT);
     pinMode(pin_B, INPUT);
     pinMode(button_pin, INPUT);
+	pinMode (g_pinCommLatch, OUTPUT);
+	pinMode (g_pinClock, OUTPUT);
+	pinMode (g_pinData, OUTPUT);
     currentTime = millis();
     loopTime = currentTime; 
     Serial.begin(57600);
     Wire.begin();
     RTC.begin();
     //DateTime now = RTC.now();
+	
+  // Setup the digits array
+  // a = 8 b = 4 c = 2 d = 64 e = 32 f = 1 g = 16
+  g_digits [0] = 8 + 4 + 2 + 64 + 32 + 1;
+  g_digits [1] = 4 + 2;
+  g_digits [2] = 8 + 4 + 16 + 32 + 64;
+  g_digits [3] = 8 + 4 + 16 + 2 + 64;
+  g_digits [4] = 1 + 16 + 4 + 2;
+  g_digits [5] = 8 + 1 + 16 + 2 + 64;
+  g_digits [6] = 8 + 1 + 16 + 2 + 64 + 32;
+  g_digits [7] = 8 + 4 + 2;
+  g_digits [8] = 8 + 4 + 2 + 64 + 32 + 1 + 16;
+  g_digits [9] = 8 + 4 + 2 + 1 + 16 + 64;
+  g_digits [10] = 0;
 
  
   if (! RTC.isrunning()) {
@@ -164,6 +190,28 @@ void time_array_to_digit_array(int time_array[6], int digit_array[6]){
   Serial.println(); 
 }
 
+void sendSerialData (byte registerCount, byte *pValueArray)
+{
+  // Signal to the 595s to listen for data
+  digitalWrite (g_pinCommLatch, LOW);
+  
+  for (byte reg = registerCount; reg > 0; reg--)
+  {
+    byte value = pValueArray [reg - 1];
+    
+    for (byte bitMask = 128; bitMask > 0; bitMask >>= 1)
+    {
+      digitalWrite (g_pinClock, LOW);
+    
+      digitalWrite (g_pinData, value & bitMask ? HIGH : LOW);
+        
+      digitalWrite (g_pinClock, HIGH);
+    }
+  }
+  // Signal to the 595s that I'm done sending
+  digitalWrite (g_pinCommLatch, HIGH);
+}  // sendSerialData
+
 // _____________ PROGRAM STARTS HERE: _____________//
 
 void loop () {
@@ -241,7 +289,9 @@ int now_second = now.second();
 if (old_second >= 59){
   old_second = 0;
 }
-if (now_second > old_second){
+
+if (now_second > old_second) // This is the code that causes the clock to "tick"
+{
   Serial.print("Unix time: ");
   Serial.print(now.unixtime());
   Serial.println();
@@ -332,6 +382,13 @@ if (now_second > old_second){
 }
 
 }
+    g_registerArray [3] = g_digits[display_array[0]];
+    g_registerArray [2] = g_digits[display_array[1]];
+    g_registerArray [1] = g_digits[display_array[2]];
+    g_registerArray [0] = g_digits[display_array[3]];
+	
+
+sendSerialData (g_registers, g_registerArray);
 
 }
 
