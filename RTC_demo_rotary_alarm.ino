@@ -176,18 +176,18 @@ void time_array_to_digit_array(int time_array[6], int digit_array[6]){
     digit_array[3] = minutes%10;
   }
   
-  Serial.print("Digit 1:");
-  Serial.print(digit_array[0]);
-  Serial.println(); 
-  Serial.print("Digit 2:");
-  Serial.print(digit_array[1]);
-  Serial.println(); 
-  Serial.print("Digit 3:");
-  Serial.print(digit_array[2]);
-  Serial.println(); 
-  Serial.print("Digit 4:");
-  Serial.print(digit_array[3]);
-  Serial.println(); 
+  // Serial.print("Digit 1:");
+  // Serial.print(digit_array[0]);
+  // Serial.println(); 
+  // Serial.print("Digit 2:");
+  // Serial.print(digit_array[1]);
+  // Serial.println(); 
+  // Serial.print("Digit 3:");
+  // Serial.print(digit_array[2]);
+  // Serial.println(); 
+  // Serial.print("Digit 4:");
+  // Serial.print(digit_array[3]);
+  // Serial.println(); 
 }
 
 void sendSerialData (byte registerCount, byte *pValueArray)
@@ -236,51 +236,39 @@ if (alarm == time_to_double(now)){
   mode = 3;
 }
 
- if(mode == 1){
+ if(mode == 1){ // This is current time mode
    currentTime = millis();
+   time_array_to_digit_array(current_time_array, display_array); 
  // get the current elapsed time
-    // 5ms since last check of encoder = 200Hz  
+    // 5ms since last check of encoder = 200Hz
     encoder_A = digitalRead(pin_A);    // Read encoder pins
     encoder_B = digitalRead(pin_B);   
-    if((!encoder_A) && (encoder_A_prev)){
-      // A has gone from high to low 
-      if(encoder_B) {
-        // B is high so clockwise
-        // increase the brightness, dont go over 255
-          timeout = 0; 
-          now = RTC.now();
-          DateTime then(now.unixtime() + adjust_amount); // one hour later
-          RTC.adjust(then);
-          now = RTC.now();
-          printtime(now);   
-      }
-      else {
-        // B is low so counter-clockwise      
-        // decrease the brightness, dont go below 0
-          timeout = 0; 
-          now = RTC.now();
-          DateTime then(now.unixtime() - adjust_amount); // one hour later
-          RTC.adjust(then);
-          now = RTC.now();
-          printtime(now);        
-      }   
+		if((!encoder_A) && (encoder_A_prev)){
+		  // A has gone from high to low 
+		  if(encoder_B) {
+			// B is high so clockwise
+			// increase the brightness, dont go over 255
+			  timeout = 0; 
+			  now = RTC.now();
+			  DateTime then(now.unixtime() + adjust_amount); // one hour later
+			  RTC.adjust(then);
+			  now = RTC.now();
+			  printtime(now);   
+		  }
+		  else {
+			// B is low so counter-clockwise      
+			// decrease the brightness, dont go below 0
+			  timeout = 0; 
+			  now = RTC.now();
+			  DateTime then(now.unixtime() - adjust_amount); // one hour later
+			  RTC.adjust(then);
+			  now = RTC.now();
+			  printtime(now);        
+		  }   
 
-    }
-    encoder_A_prev = encoder_A;
-    loopTime = currentTime;
-// Previous tick mechanism:
-
-/*
-current_count += 1;
-if (current_count%500==0){
-  printtime(now);
-  time_to_ints(now, current_time_array);
-  current_count = 1;
-  print_time_array_separated(current_time_array);
-  Serial.print("Unix time: ");
-  Serial.print(now.unixtime());
-}
-*/
+		}
+		encoder_A_prev = encoder_A;
+		loopTime = currentTime;
 
 // New tick mechanism:
 
@@ -300,7 +288,6 @@ if (now_second > old_second) // This is the code that causes the clock to "tick"
   Serial.print("Time as a double: ");
   Serial.print(time_to_double(now));
   Serial.println();
-  time_array_to_digit_array(current_time_array, display_array); 
   if (button_hold == true){
     if (button_counter >= 3) {
       mode = 2;
@@ -319,7 +306,10 @@ if (now_second > old_second) // This is the code that causes the clock to "tick"
 }
 }
 
- if(mode == 2){
+ if(mode == 2){ // This is alarm set mode
+ 
+ time_array_to_digit_array(alarm_array, display_array);
+ secs_to_hms(alarm, alarm_array);
 
 
     // 5ms since last check of encoder = 200Hz  
@@ -357,9 +347,7 @@ if (now_second > old_second){
     Serial.println();
   }
   Serial.print("Alarm Set Mode");
-  Serial.println();
-  time_array_to_digit_array(alarm_array, display_array);
-  secs_to_hms(alarm, alarm_array);
+  Serial.println();  
   print_time_array_separated(alarm_array);
 }
 
@@ -369,26 +357,29 @@ if (now_second > old_second){
    
  }
  
-if(mode == 3){
+if(mode == 3){ // This is alarm mode
   
 int now_second = now.second();
 if (old_second >= 59){
   old_second = 0;
 }
 if (now_second > old_second){
-  Serial.print("Alarm!!!! This is testing using git gui. I checked out the alarm branch");
+  Serial.print("Alarm!!!!");
   Serial.println();
   old_second = now_second;
 }
 
 }
-    g_registerArray [3] = g_digits[display_array[0]];
-    g_registerArray [2] = g_digits[display_array[1]];
-    g_registerArray [1] = g_digits[display_array[2]];
-    g_registerArray [0] = g_digits[display_array[3]];
-	
 
-sendSerialData (g_registers, g_registerArray);
+
+
+	g_registerArray [3] = g_digits[display_array[0]];
+	g_registerArray [2] = g_digits[display_array[1]];
+	g_registerArray [1] = g_digits[display_array[2]];
+	g_registerArray [0] = g_digits[display_array[3]];
+		
+	sendSerialData (g_registers, g_registerArray);
+
 
 }
 
