@@ -49,8 +49,7 @@ void setup () {
 	pinMode (g_pinCommLatch, OUTPUT);
 	pinMode (g_pinClock, OUTPUT);
 	pinMode (g_pinData, OUTPUT);
-    currentTime = millis();
-    loopTime = currentTime; 
+
     Serial.begin(57600);
     Wire.begin();
     RTC.begin();
@@ -143,6 +142,15 @@ void print_time_array_separated(int time_array[6]){
   Serial.println();
 }
 
+int tick(int delay){
+currentTime = millis();
+if(currentTime >= (loopTime + delay)){
+	loopTime = currentTime;
+	return 1;
+  }
+else {return 0;}
+}
+
 void secs_to_hms(double secs_in, int time_array[6]){
     double hours = floor(secs_in/3600);
     double minutes = floor(((secs_in - hours*3600)/60));
@@ -163,10 +171,13 @@ void time_array_to_digit_array(int time_array[6], int digit_array[6]){
   int hours = time_array[3];
   int minutes = time_array[4];
   int seconds = time_array[5];
-  if (time_format == 12 && hours > 12) {
+  if (hours == 0){
+  hours = 12;
+  }
+  else if (time_format == 12 && hours > 12) {
    hours -= 12; 
   }
-  if (hours < 10){
+  if (hours < 10 && hours > 0){
     digit_array[0] = 10; // 10 will be the designation for not displaying anything
     digit_array[1] = hours;
   }
@@ -275,15 +286,11 @@ if (alarm == time_to_double(now)){
 
 		}
 		encoder_A_prev = encoder_A;
-		loopTime = currentTime;
 
 // New tick mechanism:
 
 
-now_second = now.second();
-
-if (now_second == old_second + 1) // This is the code that causes the clock to "tick"
-{
+if (tick(1000) == 1){
   Serial.print("Unix time: ");
   Serial.print(now.unixtime());
   Serial.println();
@@ -299,7 +306,6 @@ if (now_second == old_second + 1) // This is the code that causes the clock to "
     Serial.print("Switched mode to:");
     Serial.print(mode);
     Serial.println();
-	loopTime = currentTime;
     }
     button_counter += 1;
   }
@@ -311,15 +317,21 @@ if (now_second == old_second + 1) // This is the code that causes the clock to "
   Serial.println();
 }
 
-if (old_second >= 59){
-  old_second = 0;
-}
 }
 
  if(mode == "alarm_set"){ // This is alarm set mode
  
+if (button_hold == true && sub_mode == "minute_set") {sub_mode = "hour_set";}
+else if (button_hold == true && sub_mode == "hour_set") {sub_mode = "minute_set";}
+ 
  secs_to_hms(alarm, alarm_array);
 
+	if (sub_mode == "minute_set"){
+	multiplier = 1;
+	}
+	else if (sub_mode == "hour_set"){
+	multiplier = 60;
+	}
 
     // 5ms since last check of encoder = 200Hz  
  encoder_A = digitalRead(pin_A);    // Read encoder pins
@@ -327,12 +339,6 @@ if (old_second >= 59){
     if((!encoder_A) && (encoder_A_prev)){
 	timeout = 0;   
 	blink = 1;
-		if (sub_mode == "minute_set"){
-		multiplier = 1;
-		}
-		else if (sub_mode == "hour_set"){
-		multiplier = 60;
-		}
       // A has gone from high to low 
       if(encoder_B) {
         // B is high so clockwise
@@ -340,46 +346,31 @@ if (old_second >= 59){
       }
       else {
         // B is low so counter-clockwise    
-          alarm -= adjust_amount;     
+          alarm -= adjust_amount*multiplier;     
       }   
 
     }
     encoder_A_prev = encoder_A;
-	
 
 time_array_to_digit_array(alarm_array, display_array);
 
-if (blink == 0){
+if (blink == 0 && sub_mode == "minute_set"){
 	display_array[2] = 10;
 	display_array[3] = 10;
+	}
+if (blink == 0 && sub_mode == "hour_set"){
+	display_array[0] = 10;
+	display_array[1] = 10;
 	}
 	
 currentTime = millis();
 if(currentTime >= (loopTime + 500)){
-	if (sub_mode == "minute_set" && blink == 0){
-	display_array[2] = 10;
-	display_array[3] = 10;
+	if ((sub_mode == "minute_set" || sub_mode == "hour_set") && blink == 0){
 	blink = 1;
-	Serial.print("Blink off");
-	Serial.println();
-	Serial.print("Loop time = ");
-	Serial.print(loopTime);
-	Serial.println();
-	Serial.print("Current time = ");
-	Serial.print(currentTime);
-	Serial.println();    
 	}
-	else if (sub_mode == "minute_set" && blink == 1){
+	else if ((sub_mode == "minute_set" || sub_mode == "hour_set") && blink == 1){
 	blink = 0;
-	Serial.print("Blink on");
-	Serial.println();
-	Serial.print("Loop time = ");
-	Serial.print(loopTime);
-	Serial.println();
-	Serial.print("Current time = ");
-	Serial.print(currentTime);
-	Serial.println();   	
-	}	
+	}		
   loopTime = currentTime;
   }
   
@@ -409,7 +400,7 @@ if (old_second >= 59){
    
  }
  
-if(mode == "alarm_sound"){ // This is alarm mode
+if(mode == "alarm_sound"){ // This is alarm mode. Current problem is display_array doesn't get updated
   
 int now_second = now.second();
 if (old_second >= 59){
@@ -422,6 +413,7 @@ if (now_second > old_second){
 }
 
 }
+
 
 
 
