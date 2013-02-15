@@ -32,6 +32,8 @@ int button_state = 0;
 int button_counter = 0; // This is used to detect how long the button is held for
 int timeout = 0; // Time out for not pushing the button for a while
 int blink = 1; // This is used for blinking numbers while adjusting time
+double second_timer[1] = {0}; // This is use dto keep track of the timer used to tick for each second
+double half_second_timer[1] = {0}; // This is use dto keep track of the timer used to tick for each second
 
 // Bit shifter pins:
 
@@ -82,7 +84,7 @@ void setup () {
 }
 
 
-void printtime(DateTime time){
+void printtime(DateTime time){ // This function mainly used for debugging purposes
     Serial.print(" time: ");
     Serial.print(time.year(), DEC);
     Serial.print('/');
@@ -142,10 +144,16 @@ void print_time_array_separated(int time_array[6]){
   Serial.println();
 }
 
-int tick(int delay){
+int tick(int delay, double timekeeper[1]){
 currentTime = millis();
-if(currentTime >= (loopTime + delay)){
-	loopTime = currentTime;
+if(currentTime >= (timekeeper[0] + delay)){
+	timekeeper[0] = currentTime;
+	Serial.print("From within tick function, time keeper is now:");
+  Serial.print(second_timer[0]);
+  Serial.println();
+  	Serial.print("From within tick function, currentTime is now:");
+  Serial.print(currentTime);
+  Serial.println();
 	return 1;
   }
 else {return 0;}
@@ -290,7 +298,7 @@ if (alarm == time_to_double(now)){
 // New tick mechanism:
 
 
-if (tick(1000) == 1){
+if (tick(1000, second_timer) == 1){
   Serial.print("Unix time: ");
   Serial.print(now.unixtime());
   Serial.println();
@@ -362,43 +370,29 @@ if (blink == 0 && sub_mode == "hour_set"){
 	display_array[0] = 10;
 	display_array[1] = 10;
 	}
-	
-currentTime = millis();
-if(currentTime >= (loopTime + 500)){
-	if ((sub_mode == "minute_set" || sub_mode == "hour_set") && blink == 0){
-	blink = 1;
+
+	if (tick(1000, second_timer) == 1){  
+	  timeout += 1;
+	  if (timeout >= 10){ // If the button is not pressed for 10 seconds
+		mode = "time_disp";
+		timeout = 0;
+		Serial.print("Timeout, switching to clock mode");
+		Serial.println();
+	  }
+	  Serial.print("Alarm Set Mode");
+	  Serial.println();  
+	  print_time_array_separated(alarm_array);
 	}
-	else if ((sub_mode == "minute_set" || sub_mode == "hour_set") && blink == 1){
-	blink = 0;
-	}		
-  loopTime = currentTime;
-  }
-  
-  now_second = now.second();
-
-if (now_second == old_second + 1){
-  old_second = now_second;
-  timeout += 1;
-  if (timeout >= 10){ // If the button is not pressed for 10 seconds
-    mode = "time_disp";
-    timeout = 0;
-    Serial.print("Timeout, switching to clock mode");
-    Serial.println();
-  }
-  Serial.print("Alarm Set Mode");
-  Serial.println();  
-  print_time_array_separated(alarm_array);
+	  
+	if (tick(500, half_second_timer) == 1){  
+		if ((sub_mode == "minute_set" || sub_mode == "hour_set") && blink == 0){
+		blink = 1;
+		}
+		else if ((sub_mode == "minute_set" || sub_mode == "hour_set") && blink == 1){
+		blink = 0;
+		}
+	}
 }
-
-if (old_second >= 59){
-  old_second = 0;
-}
-
-
-
-
-   
- }
  
 if(mode == "alarm_sound"){ // This is alarm mode. Current problem is display_array doesn't get updated
   
