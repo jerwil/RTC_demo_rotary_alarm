@@ -28,7 +28,7 @@ int now_second = 0;
 int unixtime_int = 0;
 int display_array[6];
 int time_format = 12;
-boolean button_hold = false;
+boolean button_hi = false;
 int button_state = 0;
 int button_counter = 0; // This is used to detect how long the button is held for
 int timeout = 0; // Time out for not pushing the button for a while
@@ -36,6 +36,9 @@ int blink = 1; // This is used for blinking numbers while adjusting time
 double second_timer[1] = {0}; // This is use dto keep track of the timer used to tick for each second
 double half_second_timer[1] = {0}; // This is use dto keep track of the timer used to tick for each second
 int PM = 0; // This is the indicator that time is in PM
+int button_press_initiate[1]; 
+int button_press_completed[1];
+int button_pushed = 0; // This is the indicator that the button was pushed and released
 
 // Bit shifter pins:
 
@@ -244,6 +247,21 @@ void sendSerialData (byte registerCount, byte *pValueArray)
   digitalWrite (g_pinCommLatch, HIGH);
 }  // sendSerialData
 
+int button_press (int button_indicator, int button_press_initiated[1], int button_press_complete[1]){
+	if (button_indicator == 0 && button_press_initiated[0] == 1) {
+	button_press_complete[0] = 1;
+	Serial.print("Button press complete");
+	Serial.println();
+	button_press_initiated[0] = 0;
+	}
+	else if (button_indicator == 1){
+	button_press_initiated[0] = 1;
+	button_press_complete[0] = 0;
+	}
+	else {button_press_complete[0] = 0;}
+return button_press_complete[0];
+}
+
 // _____________ PROGRAM STARTS HERE: _____________//
 
 void loop () {
@@ -252,12 +270,13 @@ DateTime now = RTC.now();
 time_to_ints(now, current_time_array);
 
 button_state = digitalRead(button_pin);
+button_pushed = button_press (button_state, button_press_initiate, button_press_completed);
 if (button_state == HIGH){
- button_hold = true;
+ button_hi = true;
  timeout = 0; 
 }
 else {
- button_hold = false; 
+ button_hi = false; 
 }
 
 if (PM == 1){digitalWrite(PM_pin, HIGH);}
@@ -288,7 +307,7 @@ if (tick(1000, second_timer) == 1){
   Serial.print("Time as a double: ");
   Serial.print(time_to_double(now));
   Serial.println();
-  if (button_hold == true){ // This code checks to see if the button has been held down long enough to set alarm
+  if (button_hi == true){ // This code checks to see if the button has been held down long enough to set alarm
     if (button_counter >= 3) {
       mode = "alarm_set";
 	  sub_mode = "minute_set";
@@ -309,10 +328,11 @@ if (tick(1000, second_timer) == 1){
 }
 
  if(mode == "time_set"){ // This is time set mode 
-	if (button_hold == true && sub_mode == "minute_set") {sub_mode = "hour_set";}
-	else if (button_hold == true && sub_mode == "hour_set") {
+	if (button_pushed == 1 && sub_mode == "minute_set") {sub_mode = "hour_set";}
+	else if (button_pushed == 1 && sub_mode == "hour_set") {
 	mode = "alarm_set";
 	sub_mode = "minute_set";
+	button_pushed = 0;
 	}
 	time_array_to_digit_array(current_time_array, display_array); 
    	if (sub_mode == "minute_set"){
@@ -387,8 +407,8 @@ if (tick(1000, second_timer) == 1){
 
  if(mode == "alarm_set"){ // This is alarm set mode
  
-if (button_hold == true && sub_mode == "minute_set") {sub_mode = "hour_set";}
-else if (button_hold == true && sub_mode == "hour_set") {
+if (button_pushed == 1 && sub_mode == "minute_set") {sub_mode = "hour_set";}
+else if (button_pushed == 1 && sub_mode == "hour_set") {
 	mode = "time_set";
 	sub_mode = "minute_set";
 }
@@ -457,11 +477,8 @@ if (blink == 0 && sub_mode == "hour_set"){
  
 if(mode == "alarm_sound"){ // This is alarm mode. Current problem is display_array doesn't get updated
   
-int now_second = now.second();
-if (old_second >= 59){
-  old_second = 0;
-}
-if (now_second > old_second){
+
+if (tick(1000, second_timer) == 1){  
   Serial.print("Alarm!!!!");
   Serial.println();
   old_second = now_second;
