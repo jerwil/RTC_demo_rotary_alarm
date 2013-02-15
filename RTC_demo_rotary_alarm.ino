@@ -11,6 +11,7 @@ unsigned long currentTime;
 unsigned long loopTime;
 const int pin_A = 11;  // Rotary encoder pin A
 const int pin_B = 10;  // Rotary encoder pin B
+const int PM_pin = 13;  // This indicates if time is PM
 const int button_pin = 8;
 unsigned char encoder_A;
 unsigned char encoder_B;
@@ -34,6 +35,7 @@ int timeout = 0; // Time out for not pushing the button for a while
 int blink = 1; // This is used for blinking numbers while adjusting time
 double second_timer[1] = {0}; // This is use dto keep track of the timer used to tick for each second
 double half_second_timer[1] = {0}; // This is use dto keep track of the timer used to tick for each second
+int PM = 0; // This is the indicator that time is in PM
 
 // Bit shifter pins:
 
@@ -51,6 +53,7 @@ void setup () {
 	pinMode (g_pinCommLatch, OUTPUT);
 	pinMode (g_pinClock, OUTPUT);
 	pinMode (g_pinData, OUTPUT);
+	pinMode (PM_pin, OUTPUT);
 
     Serial.begin(57600);
     Wire.begin();
@@ -179,11 +182,13 @@ void time_array_to_digit_array(int time_array[6], int digit_array[6]){
   int hours = time_array[3];
   int minutes = time_array[4];
   int seconds = time_array[5];
+  PM = 0; // AM until proven PM
   if (hours == 0){
   hours = 12;
   }
   else if (time_format == 12 && hours > 12) {
-   hours -= 12; 
+   hours -= 12;
+	PM = 1;
   }
   if (hours < 10 && hours > 0){
     digit_array[0] = 10; // 10 will be the designation for not displaying anything
@@ -201,6 +206,7 @@ void time_array_to_digit_array(int time_array[6], int digit_array[6]){
     digit_array[2] = minutes/10;
     digit_array[3] = minutes%10;
   }
+  if (time_format == 24){PM = 0;} // The PM LED is not needed in 24 hour time format
   
   // Serial.print("Digit 1:");
   // Serial.print(digit_array[0]);
@@ -254,6 +260,8 @@ else {
  button_hold = false; 
 }
 
+if (PM == 1){digitalWrite(PM_pin, HIGH);}
+else{digitalWrite(PM_pin, LOW);}
 
 //time_to_ints(now, current_time_array);
 
@@ -267,33 +275,6 @@ if (alarm == time_to_double(now)){
    time_array_to_digit_array(current_time_array, display_array); 
  // get the current elapsed time
     // 5ms since last check of encoder = 200Hz
-    encoder_A = digitalRead(pin_A);    // Read encoder pins
-    encoder_B = digitalRead(pin_B);   
-		if((!encoder_A) && (encoder_A_prev)){
-		  // A has gone from high to low 
-		  if(encoder_B) {
-			// B is high so clockwise
-			// increase the brightness, dont go over 255
-			  timeout = 0; 
-			  now = RTC.now();
-			  DateTime then(now.unixtime() + adjust_amount); // one hour later
-			  RTC.adjust(then);
-			  now = RTC.now();
-			  printtime(now);   
-		  }
-		  else {
-			// B is low so counter-clockwise      
-			// decrease the brightness, dont go below 0
-			  timeout = 0; 
-			  now = RTC.now();
-			  DateTime then(now.unixtime() - adjust_amount); // one hour later
-			  RTC.adjust(then);
-			  now = RTC.now();
-			  printtime(now);        
-		  }   
-
-		}
-		encoder_A_prev = encoder_A;
 
 // New tick mechanism:
 
@@ -327,10 +308,90 @@ if (tick(1000, second_timer) == 1){
 
 }
 
+ if(mode == "time_set"){ // This is time set mode 
+	if (button_hold == true && sub_mode == "minute_set") {sub_mode = "hour_set";}
+	else if (button_hold == true && sub_mode == "hour_set") {
+	mode = "alarm_set";
+	sub_mode = "minute_set";
+	}
+	time_array_to_digit_array(current_time_array, display_array); 
+   	if (sub_mode == "minute_set"){
+	multiplier = 1;
+	}
+	else if (sub_mode == "hour_set"){
+	multiplier = 60;
+	}
+    encoder_A = digitalRead(pin_A);    // Read encoder pins, this should be turned into a function!!!!!!!!!!!!!!!!!!!!!!!!!
+    encoder_B = digitalRead(pin_B);   
+		if((!encoder_A) && (encoder_A_prev)){
+		  // A has gone from high to low 
+		  if(encoder_B) {
+			// B is high so clockwise
+			// increase the brightness, dont go over 255
+			timeout = 0;
+			blink = 1; // This ensures the digits are visible while adjusting time			  
+			now = RTC.now();
+			DateTime then(now.unixtime() + adjust_amount*multiplier); // one hour later
+			RTC.adjust(then);
+			now = RTC.now();
+			printtime(now);   
+		  }
+		  else {
+			// B is low so counter-clockwise      
+			// decrease the brightness, dont go below 0
+			timeout = 0;
+			blink = 1;			  
+			now = RTC.now();
+			DateTime then(now.unixtime() - adjust_amount*multiplier); // one hour later
+			RTC.adjust(then);
+			now = RTC.now();
+			printtime(now);        
+		  }   
+
+		}
+		encoder_A_prev = encoder_A;
+
+	time_array_to_digit_array(current_time_array, display_array);
+		
+	if (blink == 0 && sub_mode == "minute_set"){
+		display_array[2] = 10;
+		display_array[3] = 10;
+		}
+	if (blink == 0 && sub_mode == "hour_set"){
+		display_array[0] = 10;
+		display_array[1] = 10;
+		}
+
+	if (tick(1000, second_timer) == 1){  
+	  timeout += 1;
+	  if (timeout >= 10){ // If the button is not pressed for 10 seconds
+		mode = "time_disp";
+		timeout = 0;
+		Serial.print("Timeout, switching to clock mode");
+		Serial.println();
+	  }
+	  Serial.print("Time Set Mode");
+	  Serial.println();  
+	  print_time_array_separated(current_time_array);
+	}
+	
+	if (tick(500, half_second_timer) == 1){  
+		if ((sub_mode == "minute_set" || sub_mode == "hour_set") && blink == 0){
+			blink = 1;
+		}
+		else if ((sub_mode == "minute_set" || sub_mode == "hour_set") && blink == 1){
+			blink = 0;
+		}
+	}
+}
+
  if(mode == "alarm_set"){ // This is alarm set mode
  
 if (button_hold == true && sub_mode == "minute_set") {sub_mode = "hour_set";}
-else if (button_hold == true && sub_mode == "hour_set") {sub_mode = "minute_set";}
+else if (button_hold == true && sub_mode == "hour_set") {
+	mode = "time_set";
+	sub_mode = "minute_set";
+}
  
  secs_to_hms(alarm, alarm_array);
 
