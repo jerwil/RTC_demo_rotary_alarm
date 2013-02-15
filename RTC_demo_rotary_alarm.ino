@@ -477,26 +477,30 @@ if (blink == 0 && sub_mode == "hour_set"){
  
 if(mode == "alarm_sound"){ // This is alarm mode. Current problem is display_array doesn't get updated
   
+time_array_to_digit_array(current_time_array, display_array);
 
-if (tick(1000, second_timer) == 1){  
-  Serial.print("Alarm!!!!");
-  Serial.println();
-  old_second = now_second;
+	if (blink == 0){
+		display_array[0] = 10;
+		display_array[1] = 10;
+		display_array[2] = 10;
+		display_array[3] = 10;
+	}  
+if (tick(500, second_timer) == 1){
+	if (blink == 0){blink = 1;}
+	else if (blink == 1){blink = 0;}
+		Serial.print("Alarm!!!!");
+		Serial.println();
+	}
+	if (button_pushed == 1){mode = "time_disp";}
 }
 
-}
-
-
-
+// At the end of each cycle, send display array data to shift registers
 
 	g_registerArray [3] = g_digits[display_array[0]];
 	g_registerArray [2] = g_digits[display_array[1]];
 	g_registerArray [1] = g_digits[display_array[2]];
 	g_registerArray [0] = g_digits[display_array[3]];
-		
 	sendSerialData (g_registers, g_registerArray);
-
-
 }
 
 
