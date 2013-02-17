@@ -39,6 +39,8 @@ int PM = 0; // This is the indicator that time is in PM
 int button_press_initiate[1]; 
 int button_press_completed[1];
 int button_pushed = 0; // This is the indicator that the button was pushed and released
+int alarm_tone = 1000; // This is the frequency for the alarm buzzer
+int speakerPin = 9; // This is the pin used by the alarm buzzer
 
 // Bit shifter pins:
 
@@ -57,6 +59,7 @@ void setup () {
 	pinMode (g_pinClock, OUTPUT);
 	pinMode (g_pinData, OUTPUT);
 	pinMode (PM_pin, OUTPUT);
+	pinMode (speakerPin, OUTPUT);
 
     Serial.begin(57600);
     Wire.begin();
@@ -262,6 +265,13 @@ int button_press (int button_indicator, int button_press_initiated[1], int butto
 return button_press_complete[0];
 }
 
+void buzz(int tone) {
+    digitalWrite(speakerPin, HIGH);
+    delayMicroseconds(tone);
+    digitalWrite(speakerPin, LOW);
+    delayMicroseconds(tone);
+}
+
 // _____________ PROGRAM STARTS HERE: _____________//
 
 void loop () {
@@ -310,10 +320,11 @@ if (tick(1000, second_timer) == 1){
   if (button_hi == true){ // This code checks to see if the button has been held down long enough to set alarm
     if (button_counter >= 3) {
       mode = "alarm_set";
-	  sub_mode = "minute_set";
+	  sub_mode = "hour_set";
     Serial.print("Switched mode to:");
     Serial.print(mode);
     Serial.println();
+	button_pushed = 0;
     }
     button_counter += 1;
   }
@@ -330,9 +341,8 @@ if (tick(1000, second_timer) == 1){
  if(mode == "time_set"){ // This is time set mode 
 	if (button_pushed == 1 && sub_mode == "minute_set") {sub_mode = "hour_set";}
 	else if (button_pushed == 1 && sub_mode == "hour_set") {
-	mode = "alarm_set";
-	sub_mode = "minute_set";
-	button_pushed = 0;
+		sub_mode = "minute_set";
+		button_pushed = 0;
 	}
 	time_array_to_digit_array(current_time_array, display_array); 
    	if (sub_mode == "minute_set"){
@@ -390,6 +400,18 @@ if (tick(1000, second_timer) == 1){
 		Serial.print("Timeout, switching to clock mode");
 		Serial.println();
 	  }
+	if (button_hi == true){ // This code checks to see if the button has been held down long enough to set alarm
+		if (button_counter >= 3) {
+			mode = "alarm_set";
+			sub_mode = "hour_set";
+			Serial.print("Switched mode to:");
+			Serial.print(mode);
+			Serial.println();
+			button_pushed = 0;
+			}
+		button_counter += 1;
+	}
+	else {button_counter = 0;}
 	  Serial.print("Time Set Mode");
 	  Serial.println();  
 	  print_time_array_separated(current_time_array);
@@ -408,10 +430,7 @@ if (tick(1000, second_timer) == 1){
  if(mode == "alarm_set"){ // This is alarm set mode
  
 if (button_pushed == 1 && sub_mode == "minute_set") {sub_mode = "hour_set";}
-else if (button_pushed == 1 && sub_mode == "hour_set") {
-	mode = "time_set";
-	sub_mode = "minute_set";
-}
+else if (button_pushed == 1 && sub_mode == "hour_set") {sub_mode = "minute_set";}
  
  secs_to_hms(alarm, alarm_array);
 
@@ -452,6 +471,35 @@ if (blink == 0 && sub_mode == "hour_set"){
 	display_array[1] = 10;
 	}
 
+	
+	if (tick(1000, second_timer) == 1){
+  Serial.print("Unix time: ");
+  Serial.print(now.unixtime());
+  Serial.println();
+  printtime(now);
+  old_second = now_second;
+  Serial.print("Time as a double: ");
+  Serial.print(time_to_double(now));
+  Serial.println();
+  if (button_hi == true){ // This code checks to see if the button has been held down long enough to set alarm
+    if (button_counter >= 3) {
+      mode = "time_set";
+	  sub_mode = "minute_set";
+    Serial.print("Switched mode to:");
+    Serial.print(mode);
+    Serial.println();
+	button_pushed = 0;
+    }
+    button_counter += 1;
+  }
+  else {
+   button_counter = 0; 
+  }
+  Serial.print("Button held for:");
+  Serial.print(button_counter);
+  Serial.println();
+}
+	
 	if (tick(1000, second_timer) == 1){  
 	  timeout += 1;
 	  if (timeout >= 10){ // If the button is not pressed for 10 seconds
@@ -460,6 +508,18 @@ if (blink == 0 && sub_mode == "hour_set"){
 		Serial.print("Timeout, switching to clock mode");
 		Serial.println();
 	  }
+	if (button_hi == true){ // This code checks to see if the button has been held down long enough to set alarm
+		if (button_counter >= 3) {
+			mode = "time_set";
+			sub_mode = "minute_set";
+			Serial.print("Switched mode to:");
+			Serial.print(mode);
+			Serial.println();
+			button_pushed = 0;
+			}
+		button_counter += 1;
+	}
+	else {button_counter = 0;}
 	  Serial.print("Alarm Set Mode");
 	  Serial.println();  
 	  print_time_array_separated(alarm_array);
@@ -484,6 +544,7 @@ time_array_to_digit_array(current_time_array, display_array);
 		display_array[1] = 10;
 		display_array[2] = 10;
 		display_array[3] = 10;
+		buzz(alarm_tone);
 	}  
 if (tick(500, second_timer) == 1){
 	if (blink == 0){blink = 1;}
