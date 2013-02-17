@@ -41,6 +41,11 @@ int button_press_completed[1];
 int button_pushed = 0; // This is the indicator that the button was pushed and released
 int alarm_tone = 1000; // This is the frequency for the alarm buzzer
 int speakerPin = 9; // This is the pin used by the alarm buzzer
+int alarmLEDPin = 2; // This is the pin used to indicate if the alarm is on
+boolean alarm_on = false;
+unsigned long double_click_timeout;
+int click_once = 0; // This integer is used to store the fact that we have one click and are looking for the second to occur before the delay
+int double_clicked = 0; // This tells us if a double click occured. 
 
 // Bit shifter pins:
 
@@ -60,6 +65,8 @@ void setup () {
 	pinMode (g_pinData, OUTPUT);
 	pinMode (PM_pin, OUTPUT);
 	pinMode (speakerPin, OUTPUT);
+	pinMode (alarmLEDPin, OUTPUT);
+	
 
     Serial.begin(57600);
     Wire.begin();
@@ -157,12 +164,6 @@ int tick(int delay, double timekeeper[1]){
 currentTime = millis();
 if(currentTime >= (timekeeper[0] + delay)){
 	timekeeper[0] = currentTime;
-	Serial.print("From within tick function, time keeper is now:");
-  Serial.print(second_timer[0]);
-  Serial.println();
-  	Serial.print("From within tick function, currentTime is now:");
-  Serial.print(currentTime);
-  Serial.println();
 	return 1;
   }
 else {return 0;}
@@ -272,6 +273,29 @@ void buzz(int tone) {
     delayMicroseconds(tone);
 }
 
+int double_click(int delay){
+int double_click_complete;
+	if (button_pushed == 1){
+		if (click_once == 1 && millis() <= double_click_timeout + delay){
+		double_click_complete = 1;
+		Serial.print("Second click of couble click");
+		Serial.println();
+		}
+		else if (click_once == 0) {
+		click_once = 1;
+		double_click_complete = 0;
+		double_click_timeout = millis();
+		Serial.print("First click of couble click");
+		Serial.println();
+		}
+	}
+	if (button_pushed == 0 && millis() >= double_click_timeout + delay){
+	click_once = 0;
+	double_click_complete = 0;
+	}
+return double_click_complete;
+}
+
 // _____________ PROGRAM STARTS HERE: _____________//
 
 void loop () {
@@ -295,13 +319,26 @@ else{digitalWrite(PM_pin, LOW);}
 //time_to_ints(now, current_time_array);
 
 // The following checks the alarm condition:
-if (alarm == time_to_double(now)){
+if (alarm == time_to_double(now) && alarm_on == true){
   mode = "alarm_sound";
 }
 
  if(mode == "time_disp"){ // This is current time mode
    currentTime = millis();
    time_array_to_digit_array(current_time_array, display_array); 
+   
+if (alarm_on == true){digitalWrite(alarmLEDPin, HIGH);} // This indicates if the alarm is on
+else {digitalWrite(alarmLEDPin, LOW);}
+   
+double_clicked = double_click(1000);
+if (double_clicked == 1){
+alarm_on = !alarm_on;
+click_once = 0;
+double_clicked = 0;
+		Serial.print("ALARM STATUS CHANGE");
+		Serial.println();
+}
+   
  // get the current elapsed time
     // 5ms since last check of encoder = 200Hz
 
@@ -338,7 +375,8 @@ if (tick(1000, second_timer) == 1){
 
 }
 
- if(mode == "time_set"){ // This is time set mode 
+ if(mode == "time_set"){ // This is time set mode
+	digitalWrite(alarmLEDPin, LOW); // This differentiates time set mode from alarm set mode visually 
 	if (button_pushed == 1 && sub_mode == "minute_set") {sub_mode = "hour_set";}
 	else if (button_pushed == 1 && sub_mode == "hour_set") {
 		sub_mode = "minute_set";
@@ -412,9 +450,9 @@ if (tick(1000, second_timer) == 1){
 		button_counter += 1;
 	}
 	else {button_counter = 0;}
-	  Serial.print("Time Set Mode");
-	  Serial.println();  
-	  print_time_array_separated(current_time_array);
+	  // Serial.print("Time Set Mode");
+	  // Serial.println();  
+	  // print_time_array_separated(current_time_array);
 	}
 	
 	if (tick(500, half_second_timer) == 1){  
@@ -428,6 +466,8 @@ if (tick(1000, second_timer) == 1){
 }
 
  if(mode == "alarm_set"){ // This is alarm set mode
+
+// digitalWrite(alarmLEDPin, HIGH); // This shows that we are setting the alarm. This will blink.
  
 if (button_pushed == 1 && sub_mode == "minute_set") {sub_mode = "hour_set";}
 else if (button_pushed == 1 && sub_mode == "hour_set") {sub_mode = "minute_set";}
@@ -445,6 +485,7 @@ else if (button_pushed == 1 && sub_mode == "hour_set") {sub_mode = "minute_set";
  encoder_A = digitalRead(pin_A);    // Read encoder pins
  encoder_B = digitalRead(pin_B);   
     if((!encoder_A) && (encoder_A_prev)){
+	digitalWrite(alarmLEDPin, HIGH);
 	timeout = 0;   
 	blink = 1;
       // A has gone from high to low 
@@ -465,40 +506,15 @@ time_array_to_digit_array(alarm_array, display_array);
 if (blink == 0 && sub_mode == "minute_set"){
 	display_array[2] = 10;
 	display_array[3] = 10;
+	// digitalWrite(alarmLEDPin, LOW);
 	}
 if (blink == 0 && sub_mode == "hour_set"){
 	display_array[0] = 10;
 	display_array[1] = 10;
+	// digitalWrite(alarmLEDPin, LOW);
 	}
 
 	
-	if (tick(1000, second_timer) == 1){
-  Serial.print("Unix time: ");
-  Serial.print(now.unixtime());
-  Serial.println();
-  printtime(now);
-  old_second = now_second;
-  Serial.print("Time as a double: ");
-  Serial.print(time_to_double(now));
-  Serial.println();
-  if (button_hi == true){ // This code checks to see if the button has been held down long enough to set alarm
-    if (button_counter >= 3) {
-      mode = "time_set";
-	  sub_mode = "minute_set";
-    Serial.print("Switched mode to:");
-    Serial.print(mode);
-    Serial.println();
-	button_pushed = 0;
-    }
-    button_counter += 1;
-  }
-  else {
-   button_counter = 0; 
-  }
-  Serial.print("Button held for:");
-  Serial.print(button_counter);
-  Serial.println();
-}
 	
 	if (tick(1000, second_timer) == 1){  
 	  timeout += 1;
@@ -528,9 +544,11 @@ if (blink == 0 && sub_mode == "hour_set"){
 	if (tick(500, half_second_timer) == 1){  
 		if ((sub_mode == "minute_set" || sub_mode == "hour_set") && blink == 0){
 		blink = 1;
+		digitalWrite(alarmLEDPin, HIGH);
 		}
 		else if ((sub_mode == "minute_set" || sub_mode == "hour_set") && blink == 1){
 		blink = 0;
+		digitalWrite(alarmLEDPin, LOW);
 		}
 	}
 }
